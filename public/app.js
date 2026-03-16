@@ -1,6 +1,7 @@
 let currentUser = null;
 let socket = null;
 let currentChat = null;
+const BRAND_PASSWORD = 'maimun11';
 
 const API_BASE = '/api';
 
@@ -46,6 +47,31 @@ function loginUser(user) {
   document.getElementById('no-chat').classList.remove('hidden');
   document.getElementById('messages').classList.add('hidden');
   initSocket();
+}
+
+function openBrandAuth() {
+  const modal = document.getElementById('brand-modal');
+  document.getElementById('brand-auth').classList.remove('hidden');
+  document.getElementById('brand-message').classList.add('hidden');
+  document.getElementById('brand-error').classList.add('hidden');
+  document.getElementById('brand-password').value = '';
+  modal.classList.remove('hidden');
+  setTimeout(() => document.getElementById('brand-password').focus(), 0);
+}
+
+function closeBrandModal() {
+  document.getElementById('brand-modal').classList.add('hidden');
+}
+
+function submitBrandPassword() {
+  const input = document.getElementById('brand-password').value;
+  if (input === BRAND_PASSWORD) {
+    document.getElementById('brand-auth').classList.add('hidden');
+    document.getElementById('brand-message').classList.remove('hidden');
+    document.getElementById('brand-error').classList.add('hidden');
+  } else {
+    document.getElementById('brand-error').classList.remove('hidden');
+  }
 }
 
 function logout() {
@@ -180,5 +206,11 @@ document.addEventListener('click', () => {
   const menu = document.getElementById('delete-menu');
   if (menu && !menu.classList.contains('hidden')) {
     menu.classList.add('hidden');
+  }
+});
+
+document.getElementById('brand-password')?.addEventListener('keypress', (event) => {
+  if (event.key === 'Enter') {
+    submitBrandPassword();
   }
 });

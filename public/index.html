@@ -12,7 +12,12 @@
     <!-- Login/Signup -->
     <div id="auth" class="screen">
       <div class="auth-card">
-        <h1>Messenger</h1>
+        <h1 class="brand-title">
+          <button class="brand-link" onclick="openBrandAuth()">
+            <span class="brand-accent">PLM</span>
+          </button>
+          Messenger
+        </h1>
         <div id="signup-form">
           <input type="email" id="signup-email" placeholder="Email">
           <input type="password" id="signup-password" placeholder="Password">
@@ -25,6 +30,30 @@
           <button onclick="login()">Sign In</button>
         </div>
         <p onclick="toggleAuth()">Switch</p>
+      </div>
+    </div>
+
+    <!-- Brand Message Modal -->
+    <div id="brand-modal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>PLM</h3>
+          <button class="ghost-btn" onclick="closeBrandModal()">Close</button>
+        </div>
+        <div id="brand-auth">
+          <p class="modal-subtitle">Enter password to view the message.</p>
+          <input type="password" id="brand-password" placeholder="Password">
+          <button class="send-btn" onclick="submitBrandPassword()">Unlock</button>
+          <p id="brand-error" class="error-text hidden">Incorrect password.</p>
+        </div>
+        <div id="brand-message" class="brand-message hidden">
+          <p>
+            Hi I am Pronoy Chowdhury Pothik, developer of this web app. However the whole app is dedicated
+            to the most wonderful and beloving person through my eyes. Her name is Maimun Akhter Mahi.
+            Though it is not totallly possible to express all of the love in my heart for her, but just a
+            single gesture it is, this little webapp for a more secure communication. Thank you, God bless.
+          </p>
+        </div>
       </div>
     </div>
 
