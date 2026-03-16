@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messenger</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Login/Signup -->
+    <div id="auth" class="screen">
+      <div class="auth-card">
+        <h1>Messenger</h1>
+        <div id="signup-form">
+          <input type="email" id="signup-email" placeholder="Email">
+          <input type="password" id="signup-password" placeholder="Password">
+          <input type="text" id="signup-code" placeholder="4-digit code" maxlength="4">
+          <button onclick="signup()">Create Account</button>
+        </div>
+        <div id="login-form" class="hidden">
+          <input type="email" id="login-email" placeholder="Email">
+          <input type="password" id="login-password" placeholder="Password">
+          <button onclick="login()">Sign In</button>
+        </div>
+        <p onclick="toggleAuth()">Switch</p>
+      </div>
+    </div>
+
+    <!-- Messenger UI -->
+    <div id="messenger" class="screen hidden messenger">
+      <!-- Left Sidebar -->
+      <div class="sidebar">
+        <div class="header">
+          <div class="header-top">
+            <h2>Your Code: <span id="my-code"></span></h2>
+            <div class="appbar-actions">
+              <div class="dropdown">
+                <button class="ghost-btn" onclick="toggleDeleteMenu(event)">Delete</button>
+                <div id="delete-menu" class="dropdown-menu hidden">
+                  <button class="dropdown-item" onclick="deleteMessages('half')">Delete oldest 50%</button>
+                  <button class="dropdown-item danger" onclick="deleteMessages('all')">Delete all messages</button>
+                </div>
+              </div>
+              <button class="ghost-btn" onclick="logout()">Logout</button>
+            </div>
+          </div>
+          <div class="header-search">
+            <input type="text" id="search-code" placeholder="Search by code">
+            <button onclick="searchUser()">Search</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Chat Window -->
+      <div class="chat-window">
+        <div id="chat-header" class="hidden">
+          <h3 id="chat-title"></h3>
+        </div>
+        <div id="no-chat" class="no-chat">Search by code to start a chat.</div>
+        <div id="messages" class="messages"></div>
+        <div class="message-input">
+          <input type="text" id="message-text" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+          <button class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
