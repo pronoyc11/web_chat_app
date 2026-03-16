@@ -14,29 +14,37 @@ async function signup() {
   const email = document.getElementById('signup-email').value;
   const password = document.getElementById('signup-password').value;
   const code = document.getElementById('signup-code').value;
-  
-  const data = await fetch(API_BASE + '/signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, code })
-  }).then(r => r.json());
-  
-  if (data.error) return alert(data.error);
-  loginUser(data);
+
+  try {
+    const res = await fetch(API_BASE + '/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, code })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) return alert(data.error || 'Signup failed');
+    loginUser(data);
+  } catch {
+    alert('Network error during signup');
+  }
 }
 
 async function login() {
   const email = document.getElementById('login-email').value;
   const password = document.getElementById('login-password').value;
-  
-  const data = await fetch(API_BASE + '/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  }).then(r => r.json());
-  
-  if (data.error) return alert(data.error);
-  loginUser(data);
+
+  try {
+    const res = await fetch(API_BASE + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) return alert(data.error || 'Login failed');
+    loginUser(data);
+  } catch {
+    alert('Network error during login');
+  }
 }
 
 function loginUser(user) {
@@ -93,11 +101,15 @@ function logout() {
 async function searchUser() {
   const code = document.getElementById('search-code').value;
   if (!code || code.length !== 4) return alert('Enter 4-digit code');
-  
-  const user = await fetch(API_BASE + '/user/' + code).then(r => r.json());
-  if (user.error) return alert(user.error);
-  
-  openChat(user);
+
+  try {
+    const res = await fetch(API_BASE + '/user/' + code);
+    const user = await res.json().catch(() => ({}));
+    if (!res.ok || user.error) return alert(user.error || 'User lookup failed');
+    openChat(user);
+  } catch {
+    alert('Network error while searching user');
+  }
 }
 
 // Removed chat list - single chat only
@@ -131,17 +143,21 @@ async function deleteMessages(mode) {
   const label = mode === 'all' ? 'ALL' : 'the oldest 50%';
   if (!confirm(`Delete ${label} of messages? This cannot be undone.`)) return;
 
-  const res = await fetch(API_BASE + '/messages', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode })
-  }).then(r => r.json());
-
-  if (res.error) return alert(res.error);
-  if (currentChat) {
-    loadMessages(currentChat.id);
+  try {
+    const res = await fetch(API_BASE + '/messages', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) return alert(data.error || 'Delete failed');
+    if (currentChat) {
+      loadMessages(currentChat.id);
+    }
+    document.getElementById('delete-menu').classList.add('hidden');
+  } catch {
+    alert('Network error during delete');
   }
-  document.getElementById('delete-menu').classList.add('hidden');
 }
 
 function buildMessageElement(msg) {
@@ -162,17 +178,26 @@ function buildMessageElement(msg) {
 }
 
 async function loadMessages(chatId) {
-  const messages = await fetch(API_BASE + '/messages/' + chatId + '/' + currentUser.id).then(r => r.json());
   const container = document.getElementById('messages');
   container.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  messages.forEach((msg) => {
-    frag.appendChild(buildMessageElement(msg));
-  });
-  container.appendChild(frag);
-  setTimeout(() => {
-    container.scrollTop = container.scrollHeight;
-  }, 100);
+  try {
+    const res = await fetch(API_BASE + '/messages/' + chatId + '/' + currentUser.id);
+    const messages = await res.json().catch(() => ([]));
+    if (!res.ok || messages.error) {
+      container.innerHTML = '<div class="no-chat">Failed to load messages.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    messages.forEach((msg) => {
+      frag.appendChild(buildMessageElement(msg));
+    });
+    container.appendChild(frag);
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 100);
+  } catch {
+    container.innerHTML = '<div class="no-chat">Network error loading messages.</div>';
+  }
 }
 
 function sendMessage() {

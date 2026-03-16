@@ -15,14 +15,29 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ai_web_chat_app';
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ai_web_chat_app';
 
 mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 10000
 }).catch((err) => {
   console.error('MongoDB connection error:', err.message);
 });
+
+mongoose.connection.on('connected', () => {
+  console.log('MongoDB connected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err.message);
+});
+
+function ensureDbReady(res) {
+  if (mongoose.connection.readyState !== 1) {
+    res.status(503).json({ error: 'Database not connected. Check MONGODB_URI or Atlas network access.' });
+    return false;
+  }
+  return true;
+}
 
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true, trim: true },
@@ -42,6 +57,7 @@ const Message = mongoose.model('Message', messageSchema);
 
 // Signup
 app.post('/api/signup', async (req, res) => {
+  if (!ensureDbReady(res)) return;
   const { email, password, code } = req.body;
   if (!/^\d{4}$/.test(code)) return res.status(400).json({ error: '4-digit code required' });
   try {
@@ -55,6 +71,7 @@ app.post('/api/signup', async (req, res) => {
 
 // Login
 app.post('/api/login', (req, res) => {
+  if (!ensureDbReady(res)) return;
   const { email, password } = req.body;
   User.findOne({ email }).then(async (user) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
@@ -68,6 +85,7 @@ app.post('/api/login', (req, res) => {
 
 // Search user
 app.get('/api/user/:code', (req, res) => {
+  if (!ensureDbReady(res)) return;
   User.findOne({ code: req.params.code }).then((user) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ id: user._id.toString(), code: user.code, email: user.email });
@@ -78,6 +96,7 @@ app.get('/api/user/:code', (req, res) => {
 
 // Get messages
 app.get('/api/messages/:chatId/:userId', (req, res) => {
+  if (!ensureDbReady(res)) return;
   const [id1, id2] = req.params.chatId.split('-');
   if (req.params.userId !== id1 && req.params.userId !== id2) return res.status(403).json({ error: 'Unauthorized' });
   Message.find({ chat_id: req.params.chatId }).sort({ timestamp: 1 }).lean().then((rows) => {
@@ -95,6 +114,7 @@ app.get('/api/messages/:chatId/:userId', (req, res) => {
 
 // Delete messages (maintenance)
 app.delete('/api/messages', async (req, res) => {
+  if (!ensureDbReady(res)) return;
   const { mode } = req.body || {};
   if (!['half', 'all'].includes(mode)) {
     return res.status(400).json({ error: 'Invalid delete mode' });
@@ -124,6 +144,7 @@ app.delete('/api/messages', async (req, res) => {
 
 // Get recent chats (not used in UI yet)
 app.get('/api/chats/:userId', async (req, res) => {
+  if (!ensureDbReady(res)) return;
   const userId = req.params.userId;
   try {
     const recent = await Message.aggregate([
