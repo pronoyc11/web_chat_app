@@ -49,6 +49,8 @@ const messageSchema = new mongoose.Schema({
   chat_id: { type: String, index: true, required: true },
   from_id: { type: String, required: true },
   text: { type: String, required: true },
+  read_by: { type: [String], default: [] },
+  read_at: { type: Map, of: Date, default: {} },
   timestamp: { type: Date, default: Date.now }
 });
 
@@ -105,6 +107,8 @@ app.get('/api/messages/:chatId/:userId', (req, res) => {
       chat_id: row.chat_id,
       from_id: row.from_id,
       text: row.text,
+      read_by: row.read_by || [],
+      read_at: row.read_at || {},
       timestamp: row.timestamp
     })));
   }).catch(() => {
@@ -142,6 +146,36 @@ app.delete('/api/messages', async (req, res) => {
   }
 });
 
+// Mark messages as read for a user in a chat
+app.post('/api/messages/read', async (req, res) => {
+  if (!ensureDbReady(res)) return;
+  const { chatId, userId } = req.body || {};
+  if (!chatId || !userId) return res.status(400).json({ error: 'Missing chatId/userId' });
+  const [id1, id2] = chatId.split('-');
+  if (userId !== id1 && userId !== id2) return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const unread = await Message.find({
+      chat_id: chatId,
+      from_id: { $ne: userId },
+      read_by: { $ne: userId }
+    }, { _id: 1 }).lean();
+
+    if (!unread.length) return res.json({ updated: 0, ids: [] });
+
+    await Message.updateMany(
+      { _id: { $in: unread.map(doc => doc._id) } },
+      {
+        $addToSet: { read_by: userId },
+        $set: { [`read_at.${userId}`]: new Date() }
+      }
+    );
+
+    res.json({ updated: unread.length, ids: unread.map(doc => doc._id.toString()) });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get recent chats (not used in UI yet)
 app.get('/api/chats/:userId', async (req, res) => {
   if (!ensureDbReady(res)) return;
@@ -174,7 +208,12 @@ app.get('/api/connections/:userId', async (req, res) => {
       {
         $group: {
           _id: '$from_id',
-          last_message: { $max: '$timestamp' }
+          last_message: { $max: '$timestamp' },
+          unread_count: {
+            $sum: {
+              $cond: [{ $in: [userId, '$read_by'] }, 0, 1]
+            }
+          }
         }
       },
       { $sort: { last_message: -1 } }
@@ -196,7 +235,8 @@ app.get('/api/connections/:userId', async (req, res) => {
         id: user._id.toString(),
         email: user.email,
         code: user.code,
-        last_message: r.last_message
+        last_message: r.last_message,
+        unread_count: r.unread_count || 0
       };
     }).filter(Boolean);
 
@@ -220,12 +260,20 @@ io.on('connection', (socket) => {
   socket.on('send_message', ({ chatId, text }) => {
     const userId = socket.userId;
     if (!userId) return;
-    Message.create({ chat_id: chatId, from_id: userId, text }).then((doc) => {
+    Message.create({
+      chat_id: chatId,
+      from_id: userId,
+      text,
+      read_by: [userId],
+      read_at: { [userId]: new Date() }
+    }).then((doc) => {
       const payload = {
         id: doc._id.toString(),
         chat_id: chatId,
         from_id: userId,
         text,
+        read_by: doc.read_by || [],
+        read_at: doc.read_at || {},
         timestamp: doc.timestamp
       };
       io.to(chatId).emit('new_message', payload);
@@ -234,6 +282,52 @@ io.on('connection', (socket) => {
       io.to(`user:${id1}`).emit('incoming_message', payload);
       io.to(`user:${id2}`).emit('incoming_message', payload);
     });
+  });
+
+  socket.on('mark_read', async ({ chatId, userId }) => {
+    if (!chatId || !userId) return;
+    if (socket.userId !== userId) return;
+    const [id1, id2] = chatId.split('-');
+    if (userId !== id1 && userId !== id2) return;
+    try {
+      const unread = await Message.find({
+        chat_id: chatId,
+        from_id: { $ne: userId },
+        read_by: { $ne: userId }
+      }, { _id: 1 }).lean();
+
+      if (!unread.length) return;
+
+      const readAt = new Date();
+      await Message.updateMany(
+        { _id: { $in: unread.map(doc => doc._id) } },
+        {
+          $addToSet: { read_by: userId },
+          $set: { [`read_at.${userId}`]: readAt }
+        }
+      );
+
+      io.to(chatId).emit('read_update', {
+        chat_id: chatId,
+        reader_id: userId,
+        message_ids: unread.map(doc => doc._id.toString()),
+        read_at: readAt
+      });
+    } catch (err) {
+      // ignore read errors
+    }
+  });
+
+  socket.on('typing_start', ({ chatId }) => {
+    const userId = socket.userId;
+    if (!chatId || !userId) return;
+    socket.to(chatId).emit('typing_update', { chat_id: chatId, user_id: userId, typing: true });
+  });
+
+  socket.on('typing_stop', ({ chatId }) => {
+    const userId = socket.userId;
+    if (!chatId || !userId) return;
+    socket.to(chatId).emit('typing_update', { chat_id: chatId, user_id: userId, typing: false });
   });
 });
 

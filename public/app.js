@@ -6,6 +6,8 @@ let connectionsOpen = false;
 let notificationEnabled = false;
 let swRegistration = null;
 const userCache = new Map();
+let typingTimeout = null;
+let isTyping = false;
 
 const API_BASE = '/api';
 
@@ -141,6 +143,7 @@ function openChat(user, chatId = null) {
   
   document.getElementById('chat-title').textContent = `${user.email} (${user.code})`;
   document.getElementById('chat-header').classList.remove('hidden');
+  document.getElementById('chat-typing')?.classList.add('hidden');
   document.getElementById('no-chat').classList.add('hidden');
   document.getElementById('messages').classList.remove('hidden');
   socket.emit('join_chat', chatId);
@@ -178,6 +181,7 @@ function buildMessageElement(msg) {
   const isMe = msg.from_id == currentUser.id;
   const div = document.createElement('div');
   div.className = `message ${isMe ? 'sent' : 'received'}`;
+  div.dataset.messageId = msg.id;
 
   const body = document.createElement('div');
   body.textContent = msg.text;
@@ -187,7 +191,16 @@ function buildMessageElement(msg) {
   meta.style.fontSize = '12px';
   meta.textContent = new Date(msg.timestamp).toLocaleTimeString();
 
-  div.append(body, meta);
+  if (isMe) {
+    const status = document.createElement('div');
+    status.className = 'message-status';
+    const partnerId = currentChat?.partner?.id;
+    const readAt = partnerId ? msg.read_at?.[String(partnerId)] : null;
+    status.textContent = readAt ? `Seen ${formatSeenTime(readAt)}` : 'Sent';
+    div.append(body, meta, status);
+  } else {
+    div.append(body, meta);
+  }
   return div;
 }
 
@@ -223,8 +236,11 @@ async function loadConnections() {
       button.type = 'button';
       const last = user.last_message ? new Date(user.last_message).toLocaleString() : '';
       button.innerHTML = `
-        <div class="connection-main">${user.email}</div>
-        <div class="connection-sub">Code ${user.code}${last ? ' • ' + last : ''}</div>
+        <div class="connection-main">
+          ${user.email}
+          ${user.unread_count ? `<span class="unread-badge">${user.unread_count}</span>` : ''}
+        </div>
+        <div class="connection-sub">Code ${user.code}${last ? ' - ' + last : ''}</div>
       `;
       button.addEventListener('click', () => openChat(user));
       list.appendChild(button);
@@ -252,6 +268,7 @@ async function loadMessages(chatId) {
     setTimeout(() => {
       container.scrollTop = container.scrollHeight;
     }, 100);
+    markChatRead(chatId);
   } catch {
     container.innerHTML = '<div class="no-chat">Network error loading messages.</div>';
   }
@@ -263,6 +280,47 @@ function sendMessage() {
   
   socket.emit('send_message', { chatId: currentChat.id, text });
   document.getElementById('message-text').value = '';
+  stopTyping();
+}
+
+async function markChatRead(chatId) {
+  if (!currentUser || !chatId) return;
+  socket.emit('mark_read', { chatId, userId: currentUser.id });
+  loadConnections();
+}
+
+function updateMessageStatus(messageId, readerId, readAt) {
+  const el = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!el || !el.classList.contains('sent')) return;
+  if (currentChat?.partner?.id != readerId) return;
+  const status = el.querySelector('.message-status');
+  if (status) status.textContent = `Seen ${formatSeenTime(readAt || new Date())}`;
+}
+
+function formatSeenTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString();
+}
+
+function startTyping() {
+  if (!currentChat || !socket) return;
+  if (!isTyping) {
+    isTyping = true;
+    socket.emit('typing_start', { chatId: currentChat.id });
+  }
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => stopTyping(), 1200);
+}
+
+function stopTyping() {
+  if (!currentChat || !socket) return;
+  if (isTyping) {
+    isTyping = false;
+    socket.emit('typing_stop', { chatId: currentChat.id });
+  }
+  clearTimeout(typingTimeout);
+  typingTimeout = null;
 }
 
 function initNotifications() {
@@ -331,6 +389,9 @@ function initSocket() {
       setTimeout(() => {
         container.scrollTop = container.scrollHeight;
       }, 0);
+      if (msg.from_id != currentUser.id) {
+        markChatRead(msg.chat_id);
+      }
     }
   });
 
@@ -338,6 +399,19 @@ function initSocket() {
     if (msg.from_id == currentUser.id) return;
     loadConnections();
     showIncomingNotification(msg);
+  });
+
+  socket.on('read_update', (payload) => {
+    if (payload.chat_id !== currentChat?.id) return;
+    payload.message_ids?.forEach((id) => updateMessageStatus(id, payload.reader_id, payload.read_at));
+  });
+
+  socket.on('typing_update', (payload) => {
+    if (payload.chat_id !== currentChat?.id) return;
+    if (payload.user_id == currentUser.id) return;
+    const indicator = document.getElementById('chat-typing');
+    if (!indicator) return;
+    indicator.classList.toggle('hidden', !payload.typing);
   });
 }
 
@@ -356,4 +430,12 @@ document.getElementById('brand-password')?.addEventListener('keypress', (event) 
   if (event.key === 'Enter') {
     submitBrandPassword();
   }
+});
+
+document.getElementById('message-text')?.addEventListener('input', () => {
+  if (currentChat) startTyping();
+});
+
+document.getElementById('message-text')?.addEventListener('blur', () => {
+  stopTyping();
 });

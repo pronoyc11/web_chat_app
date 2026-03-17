@@ -256,11 +256,23 @@ body {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .connection-sub {
   font-size: 12px;
   color: #9a9a9a;
+}
+
+.unread-badge {
+  background: #ff4d4d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .connections-empty {
@@ -363,6 +375,12 @@ body {
   color: white;
 }
 
+.typing-indicator {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7fb2ff;
+}
+
 .messages {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -381,6 +399,9 @@ body {
   max-width: 70%;
   word-wrap: break-word;
   align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .message.sent {
@@ -392,6 +413,12 @@ body {
 .message.received {
   background: #333;
   border-bottom-left-radius: 4px;
+}
+
+.message-status {
+  font-size: 11px;
+  opacity: 0.7;
+  align-self: flex-end;
 }
 
 .message-input {
