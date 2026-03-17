@@ -2,6 +2,10 @@ let currentUser = null;
 let socket = null;
 let currentChat = null;
 const BRAND_PASSWORD = 'maimun11';
+let connectionsOpen = false;
+let notificationEnabled = false;
+let swRegistration = null;
+const userCache = new Map();
 
 const API_BASE = '/api';
 
@@ -55,6 +59,8 @@ function loginUser(user) {
   document.getElementById('no-chat').classList.remove('hidden');
   document.getElementById('messages').classList.add('hidden');
   initSocket();
+  initNotifications();
+  loadConnections();
 }
 
 function openBrandAuth() {
@@ -89,6 +95,10 @@ function logout() {
   }
   currentUser = null;
   currentChat = null;
+  connectionsOpen = false;
+  notificationEnabled = false;
+  userCache.clear();
+  swRegistration = null;
   document.getElementById('auth').classList.remove('hidden');
   document.getElementById('messenger').classList.add('hidden');
   document.getElementById('chat-header').classList.add('hidden');
@@ -96,6 +106,8 @@ function logout() {
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('no-chat').classList.remove('hidden');
   document.getElementById('search-code').value = '';
+  const connectionsPanel = document.getElementById('connections-panel');
+  if (connectionsPanel) connectionsPanel.classList.add('hidden');
 }
 
 async function searchUser() {
@@ -106,6 +118,7 @@ async function searchUser() {
     const res = await fetch(API_BASE + '/user/' + code);
     const user = await res.json().catch(() => ({}));
     if (!res.ok || user.error) return alert(user.error || 'User lookup failed');
+    userCache.set(String(user.id), user);
     openChat(user);
   } catch {
     alert('Network error while searching user');
@@ -124,6 +137,7 @@ function openChat(user, chatId = null) {
     chatId = ids.join('-');
   }
   currentChat = { id: chatId, partner: user };
+  userCache.set(String(user.id), user);
   
   document.getElementById('chat-title').textContent = `${user.email} (${user.code})`;
   document.getElementById('chat-header').classList.remove('hidden');
@@ -177,6 +191,49 @@ function buildMessageElement(msg) {
   return div;
 }
 
+function toggleConnections() {
+  const panel = document.getElementById('connections-panel');
+  if (!panel) return;
+  connectionsOpen = !connectionsOpen;
+  panel.classList.toggle('hidden', !connectionsOpen);
+  if (connectionsOpen) loadConnections();
+}
+
+async function loadConnections() {
+  if (!currentUser) return;
+  const list = document.getElementById('connections-list');
+  const empty = document.getElementById('connections-empty');
+  if (!list || !empty) return;
+
+  try {
+    const res = await fetch(API_BASE + '/connections/' + currentUser.id);
+    const connections = await res.json().catch(() => ([]));
+    if (!res.ok || connections.error) return;
+
+    list.innerHTML = '';
+    if (!connections.length) {
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    connections.forEach((user) => {
+      userCache.set(String(user.id), user);
+      const button = document.createElement('button');
+      button.className = 'connection-item';
+      button.type = 'button';
+      const last = user.last_message ? new Date(user.last_message).toLocaleString() : '';
+      button.innerHTML = `
+        <div class="connection-main">${user.email}</div>
+        <div class="connection-sub">Code ${user.code}${last ? ' • ' + last : ''}</div>
+      `;
+      button.addEventListener('click', () => openChat(user));
+      list.appendChild(button);
+    });
+  } catch {
+    empty.classList.remove('hidden');
+  }
+}
+
 async function loadMessages(chatId) {
   const container = document.getElementById('messages');
   container.innerHTML = '';
@@ -208,11 +265,66 @@ function sendMessage() {
   document.getElementById('message-text').value = '';
 }
 
+function initNotifications() {
+  const notifyBtn = document.getElementById('notify-btn');
+  if (!notifyBtn || !('Notification' in window)) {
+    if (notifyBtn) notifyBtn.classList.add('hidden');
+    return;
+  }
+
+  updateNotificationButton();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      swRegistration = reg;
+    }).catch(() => {});
+  }
+}
+
+function updateNotificationButton() {
+  const notifyBtn = document.getElementById('notify-btn');
+  if (!notifyBtn) return;
+  const permission = Notification.permission;
+  notificationEnabled = permission === 'granted';
+  notifyBtn.textContent = notificationEnabled ? 'Notifications on' : 'Enable notifications';
+  notifyBtn.disabled = permission === 'denied';
+}
+
+async function enableNotifications() {
+  if (!('Notification' in window)) return alert('Notifications are not supported in this browser.');
+  const permission = await Notification.requestPermission();
+  notificationEnabled = permission === 'granted';
+  updateNotificationButton();
+}
+
+function showIncomingNotification(msg) {
+  if (!notificationEnabled || msg.from_id == currentUser?.id) return;
+  const inCurrentChat = msg.chat_id === currentChat?.id;
+  if (inCurrentChat && !document.hidden) return;
+
+  const sender = userCache.get(String(msg.from_id));
+  const title = sender ? `New message from ${sender.email}` : 'New message';
+  const body = msg.text;
+
+  if (swRegistration && swRegistration.showNotification) {
+    swRegistration.showNotification(title, {
+      body,
+      tag: msg.chat_id,
+      data: { chat_id: msg.chat_id }
+    });
+    return;
+  }
+  try {
+    new Notification(title, { body });
+  } catch {
+    // Ignore notification errors
+  }
+}
+
 function initSocket() {
   socket = io();
   socket.emit('user_join', currentUser.id);
   
-socket.on('new_message', (msg) => {
+  socket.on('new_message', (msg) => {
     if (msg.chat_id === currentChat?.id) {
       const container = document.getElementById('messages');
       container.appendChild(buildMessageElement(msg));
@@ -220,6 +332,12 @@ socket.on('new_message', (msg) => {
         container.scrollTop = container.scrollHeight;
       }, 0);
     }
+  });
+
+  socket.on('incoming_message', (msg) => {
+    if (msg.from_id == currentUser.id) return;
+    loadConnections();
+    showIncomingNotification(msg);
   });
 }
 

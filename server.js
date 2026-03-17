@@ -15,7 +15,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ai_web_chat_app';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/web_chat_app_upgraded';
 
 mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 10000
@@ -159,10 +159,58 @@ app.get('/api/chats/:userId', async (req, res) => {
   }
 });
 
+// Get connections (users who have sent messages to this user)
+app.get('/api/connections/:userId', async (req, res) => {
+  if (!ensureDbReady(res)) return;
+  const userId = req.params.userId;
+  try {
+    const rows = await Message.aggregate([
+      {
+        $match: {
+          chat_id: new RegExp(`(^${userId}-|-${userId}$)`),
+          from_id: { $ne: userId }
+        }
+      },
+      {
+        $group: {
+          _id: '$from_id',
+          last_message: { $max: '$timestamp' }
+        }
+      },
+      { $sort: { last_message: -1 } }
+    ]);
+
+    const senderIds = rows.map(r => r._id);
+    if (senderIds.length === 0) return res.json([]);
+
+    const users = await User.find(
+      { _id: { $in: senderIds } },
+      { email: 1, code: 1 }
+    ).lean();
+
+    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+    const result = rows.map(r => {
+      const user = userMap.get(String(r._id));
+      if (!user) return null;
+      return {
+        id: user._id.toString(),
+        email: user.email,
+        code: user.code,
+        last_message: r.last_message
+      };
+    }).filter(Boolean);
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Socket.io
 io.on('connection', (socket) => {
   socket.on('user_join', (userId) => {
     socket.userId = userId;
+    socket.join(`user:${userId}`);
   });
 
   socket.on('join_chat', (chatId) => {
@@ -173,13 +221,18 @@ io.on('connection', (socket) => {
     const userId = socket.userId;
     if (!userId) return;
     Message.create({ chat_id: chatId, from_id: userId, text }).then((doc) => {
-      io.to(chatId).emit('new_message', {
+      const payload = {
         id: doc._id.toString(),
         chat_id: chatId,
         from_id: userId,
         text,
         timestamp: doc.timestamp
-      });
+      };
+      io.to(chatId).emit('new_message', payload);
+
+      const [id1, id2] = chatId.split('-');
+      io.to(`user:${id1}`).emit('incoming_message', payload);
+      io.to(`user:${id2}`).emit('incoming_message', payload);
     });
   });
 });

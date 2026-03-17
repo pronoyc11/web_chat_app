@@ -138,6 +138,11 @@ body {
   font-size: 14px;
 }
 
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .header-search {
   display: flex;
   gap: 10px;
@@ -196,6 +201,71 @@ body {
 
 .dropdown-item.danger {
   color: #ff6b6b;
+}
+
+.connections {
+  padding: 16px 20px;
+  border-bottom: 1px solid #222;
+}
+
+.connections-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.connections-header h4 {
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #aaa;
+}
+
+.connections-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.connections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+}
+
+.connection-item:hover {
+  border-color: #3a3a3a;
+  background: #151515;
+}
+
+.connection-main {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.connection-sub {
+  font-size: 12px;
+  color: #9a9a9a;
+}
+
+.connections-empty {
+  font-size: 12px;
+  color: #777;
 }
 
 .modal {

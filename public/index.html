@@ -65,6 +65,7 @@
           <div class="header-top">
             <h2>Your Code: <span id="my-code"></span></h2>
             <div class="appbar-actions">
+              <button id="notify-btn" class="ghost-btn" onclick="enableNotifications()">Enable notifications</button>
               <div class="dropdown">
                 <button class="ghost-btn" onclick="toggleDeleteMenu(event)">Delete</button>
                 <div id="delete-menu" class="dropdown-menu hidden">
@@ -78,6 +79,16 @@
           <div class="header-search">
             <input type="text" id="search-code" placeholder="Search by code">
             <button onclick="searchUser()">Search</button>
+          </div>
+        </div>
+        <div class="connections">
+          <div class="connections-header">
+            <h4>Connections</h4>
+            <button class="ghost-btn" onclick="toggleConnections()">All Connections</button>
+          </div>
+          <div id="connections-panel" class="connections-panel hidden">
+            <div id="connections-list" class="connections-list"></div>
+            <div id="connections-empty" class="connections-empty hidden">No connections yet.</div>
           </div>
         </div>
       </div>
