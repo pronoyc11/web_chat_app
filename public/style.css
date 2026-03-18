@@ -12,6 +12,11 @@ body {
   overflow: hidden;
 }
 
+:root {
+  --panel-handle: 26px;
+  --panel-snap: 220ms;
+}
+
 .screen {
   height: 100vh;
   display: flex;
@@ -359,6 +364,15 @@ body {
   background: #000;
   min-width: 0;
   min-height: 0;
+  position: relative;
+}
+
+.panel-handle {
+  display: none;
+}
+
+.panel-hint {
+  display: none;
 }
 
 #chat-header {
@@ -470,16 +484,65 @@ body {
 @media (max-width: 768px) {
   .messenger {
     flex-direction: column;
+    position: relative;
+    overflow: hidden;
   }
   .sidebar {
     width: 100%;
+    height: min(70vh, 520px);
     border-right: none;
     border-bottom: 1px solid #333;
     flex: 0 0 auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    transform: translateY(calc(-100% + var(--panel-handle)));
+    transition: transform var(--panel-snap) ease;
   }
   .chat-window {
     flex: 1 1 auto;
     min-height: 0;
+    padding-top: var(--panel-handle);
+  }
+  .messenger.panel-open .sidebar {
+    transform: translateY(0);
+  }
+  .messenger.panel-dragging .sidebar {
+    transition: none;
+  }
+  .panel-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--panel-handle);
+    z-index: 20;
+    background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+  }
+  .panel-handle::after {
+    content: "";
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: #3a3a3a;
+  }
+  .panel-hint {
+    display: block;
+    position: absolute;
+    top: calc(var(--panel-handle) + 4px);
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    color: #7c7c7c;
+    z-index: 19;
+    pointer-events: none;
   }
   .header {
     padding: 15px;

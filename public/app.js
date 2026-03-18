@@ -138,6 +138,7 @@ function openChat(user, chatId = null) {
     const ids = [String(currentUser.id), String(user.id)].sort((a,b) => a.localeCompare(b));
     chatId = ids.join('-');
   }
+  setPanelOpenState(false);
   currentChat = { id: chatId, partner: user };
   userCache.set(String(user.id), user);
   
@@ -438,4 +439,105 @@ document.getElementById('message-text')?.addEventListener('input', () => {
 
 document.getElementById('message-text')?.addEventListener('blur', () => {
   stopTyping();
+});
+
+let panelOpen = false;
+let panelDragging = false;
+let panelStartY = 0;
+let panelStartTranslate = 0;
+
+function isMobilePanelEnabled() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function getPanelMetrics() {
+  const sidebar = document.querySelector('.sidebar');
+  const handle = document.getElementById('panel-handle');
+  if (!sidebar || !handle) return null;
+  const panelHeight = sidebar.getBoundingClientRect().height;
+  const handleHeight = handle.getBoundingClientRect().height || 0;
+  const closedTranslate = -panelHeight + handleHeight;
+  return { sidebar, handle, closedTranslate };
+}
+
+function setPanelOpenState(open) {
+  panelOpen = open;
+  const messenger = document.getElementById('messenger');
+  const hint = document.getElementById('panel-hint');
+  if (!messenger) return;
+  messenger.classList.toggle('panel-open', open);
+  if (hint) {
+    hint.textContent = open ? 'Tap to close the panel' : 'Tap to open the panel';
+  }
+  if (!open) {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.style.transform = '';
+  }
+}
+
+function parseTranslateY(transform) {
+  const match = /translateY\(([-\d.]+)px\)/.exec(transform);
+  if (!match) return null;
+  return Number.parseFloat(match[1]);
+}
+
+function onPanelPointerDown(event) {
+  if (!isMobilePanelEnabled()) return;
+  if (event.button != null && event.button !== 0) return;
+  const metrics = getPanelMetrics();
+  if (!metrics) return;
+  panelDragging = true;
+  panelStartY = event.clientY;
+  panelStartTranslate = panelOpen ? 0 : metrics.closedTranslate;
+  const messenger = document.getElementById('messenger');
+  messenger?.classList.add('panel-dragging');
+  metrics.handle.setPointerCapture?.(event.pointerId);
+}
+
+function onPanelPointerMove(event) {
+  if (!panelDragging) return;
+  const metrics = getPanelMetrics();
+  if (!metrics) return;
+  const delta = event.clientY - panelStartY;
+  let nextTranslate = panelStartTranslate + delta;
+  nextTranslate = Math.min(0, Math.max(metrics.closedTranslate, nextTranslate));
+  metrics.sidebar.style.transform = `translateY(${nextTranslate}px)`;
+}
+
+function onPanelPointerUp() {
+  if (!panelDragging) return;
+  const metrics = getPanelMetrics();
+  panelDragging = false;
+  const messenger = document.getElementById('messenger');
+  messenger?.classList.remove('panel-dragging');
+  if (!metrics) return;
+  const current = parseTranslateY(metrics.sidebar.style.transform || '');
+  const effective = current ?? (panelOpen ? 0 : metrics.closedTranslate);
+  const shouldOpen = effective > metrics.closedTranslate / 2;
+  metrics.sidebar.style.transform = '';
+  setPanelOpenState(shouldOpen);
+}
+
+const panelHandle = document.getElementById('panel-handle');
+if (panelHandle) {
+  panelHandle.addEventListener('pointerdown', onPanelPointerDown);
+  panelHandle.addEventListener('click', () => {
+    if (panelDragging) return;
+    setPanelOpenState(!panelOpen);
+  });
+}
+
+setPanelOpenState(false);
+
+window.addEventListener('pointermove', onPanelPointerMove);
+window.addEventListener('pointerup', onPanelPointerUp);
+window.addEventListener('pointercancel', onPanelPointerUp);
+window.addEventListener('resize', () => {
+  if (!isMobilePanelEnabled()) {
+    setPanelOpenState(false);
+    const messenger = document.getElementById('messenger');
+    messenger?.classList.remove('panel-dragging');
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.style.transform = '';
+  }
 });
